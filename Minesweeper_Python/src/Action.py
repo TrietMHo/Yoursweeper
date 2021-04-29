@@ -18,7 +18,7 @@ class Action():
 		self.__x = x
 		self.__y = y
 
-	def getMove(self) -> "Action Object":
+	def getMove(self) -> 'Action Object':
 		""" Allow private variable action to be publicly accessible """
 		return self.__action
 

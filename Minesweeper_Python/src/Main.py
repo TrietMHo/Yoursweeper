@@ -138,15 +138,15 @@ def main():
 					print("ERROR: Could not open file for writing!")
 
 		# If inputFile is a world file
-		elif (os.path.isfile(inputFile)):
+		elif os.path.isfile(inputFile):
 			world = World(filename=inputFile, aiType=aiType, verbose=verbose, debug=debug)
 			score = world.run()
 			if score > 0:
-			    print("WORLD COMPLETE")
+				print("WORLD COMPLETE")
 			else:
-			    print("WORLD INCOMPLETE")
+				print("WORLD INCOMPLETE")
 
-		# If inputFileis an invalid path
+		# If inputFile is an invalid path
 		else:
 			print("ERROR: Directory or file does not exist!")
 

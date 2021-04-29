@@ -20,13 +20,16 @@ class MyAI( AI ):
 
 	def __init__(self, rowDimension, colDimension, totalMines, startX, startY):
 
-		########################################################################
-		#							YOUR CODE BEGINS						   #
-		########################################################################
-		pass
-		########################################################################
-		#							YOUR CODE ENDS							   #
-		########################################################################
+		self.__rowDimension = rowDimension
+		self.__colDimension = colDimension
+		self.__totalMines = totalMines
+		self.__startX = startX
+		self.__startY = startY
+
+		self.__currentX = startX
+		self.__currentY = startY
+
+		self.
 
 		
 	def getAction(self, number: int) -> "Action Object":
