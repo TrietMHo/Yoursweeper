@@ -32,9 +32,9 @@ class MyAI(AI):
 		self.currentFlag = totalMines
 
 		# State of the board
-		self.value = [[-1 for _col in colDimension] for _row in rowDimension]
-		self.visited = [[False for _col in colDimension] for _row in rowDimension]
-		self.memo = [[0 for _col in colDimension] for _row in rowDimension]
+		self.value = [[-1 for _col in range(colDimension)] for _row in range(rowDimension)]
+		self.visited = [[False for _col in range(colDimension)] for _row in range(rowDimension)]
+		self.memo = [[0 for _col in range(colDimension)] for _row in range(rowDimension)]
 		self.edge = dict()
 
 		self.visited[startX][startY] = True
@@ -114,6 +114,7 @@ class MyAI(AI):
 	###########################################################
 	def markExpandLocation(self, x: int, y: int):
 		"""Adds a coordinate into the island queue to visit later"""
+		self.visit(x, y)
 		self.islandQueue.append((x, y))
 
 	def expandIsland(self):
@@ -121,6 +122,7 @@ class MyAI(AI):
 		if len(self.islandQueue) == 0:
 			return None
 		return self.islandQueue.pop(0)
+
 	###########################################################
 
 	def isValid(self, x: int, y: int) -> bool:
@@ -135,7 +137,7 @@ class MyAI(AI):
 				if self.isValid(x + rowDiff, y + colDiff)
 				and (rowDiff, colDiff) != (0, 0)]
 
-	def isUncovered(self, x: int, y: int):
+	def isUncovered(self, x: int, y: int) -> bool:
 		return self.getValue(x, y) != -1
 
 	def uncoverIsland(self, val: int):
@@ -158,15 +160,22 @@ class MyAI(AI):
 		expandingLocation = self.expandIsland()
 		if expandingLocation is not None:
 			self.setCurrent(*expandingLocation)
+			# If cell already uncovered, move on
+			# Else uncover the cell
 			if self.isUncovered(*expandingLocation):
 				return self.uncoverIsland(self.getValue(*expandingLocation))
 			else:
 				return Action(AI.Action.UNCOVER, *expandingLocation)
 		else:
+			return None
+
+	def solve(self, value: int) -> "Action Object":
+		action = self.uncoverIsland(value)
+		if action is None:
+			action = Action(AI.Action.LEAVE)
+		return action
+
+	def getAction(self, number: int) -> "Action Object":
+		if self.currentFlag == 0:
 			return Action(AI.Action.LEAVE)
-
-
-def getAction(self, number: int) -> "Action Object":
-	if self.currentFlag == 0:
-		return Action(AI.Action.LEAVE)
-	return self.uncoverIsland(number)
+		return self.solve(number)
