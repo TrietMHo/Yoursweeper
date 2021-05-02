@@ -25,6 +25,8 @@ class MyAI(AI):
 		self.__totalMines = totalMines
 		self.__startX = startX
 		self.__startY = startY
+		self.__target = rowDimension * colDimension - totalMines
+		self.request = 1
 
 		# Current pointer location
 		self.currentX = startX
@@ -40,6 +42,17 @@ class MyAI(AI):
 		self.visited[startX][startY] = True
 
 		self.islandQueue = []
+		self.mineQueue = []
+
+
+	# Exit condition
+	###########################################################
+	def targetMet(self) -> bool:
+		"""Provides the condition for the program to leave"""
+		return self.currentFlag == 0 and self.request == self.__target
+
+	###########################################################
+
 
 	# Current cell
 	###########################################################
@@ -53,6 +66,7 @@ class MyAI(AI):
 
 	###########################################################
 
+
 	# Value of cells
 	###########################################################
 	def setValue(self, x: int, y: int, val: int):
@@ -65,6 +79,7 @@ class MyAI(AI):
 
 	###########################################################
 
+
 	# Memo for covered cells
 	###########################################################
 	def setMemo(self, x: int, y: int, val: int):
@@ -76,11 +91,13 @@ class MyAI(AI):
 		return self.memo[x][y]
 
 	def applyMemo(self, x: int, y: int) -> int:
+		"""Gets the memo of a cell and erase the memo because it is already applied"""
 		memo = self.getMemo(x, y)
 		self.setMemo(x, y, 0)
 		return memo
 
 	###########################################################
+
 
 	# Visiting cells
 	###########################################################
@@ -98,7 +115,8 @@ class MyAI(AI):
 
 	###########################################################
 
-	# Edges of island
+
+	# Edges
 	###########################################################
 	def setEdge(self, coords: (int, int)):
 		"""Sets cell coordinates as part of the island's edge"""
@@ -106,15 +124,23 @@ class MyAI(AI):
 
 	def removeEdge(self, coords: (int, int)):
 		"""Removes a coordinates from the list of the island's edge"""
-		del self.edge[coords]
+		if self.isEdge(coords):
+			del self.edge[coords]
+
+	def isEdge(self, coords: (int, int)) -> bool:
+		"""Checks if a coordinates belong to an island's edge"""
+		return coords in self.edge
 
 	###########################################################
 
-	# Island expansion
+
+	# Island of 0 logic
 	###########################################################
 	def markExpandLocation(self, x: int, y: int):
 		"""Adds a coordinate into the island queue to visit later"""
 		self.visit(x, y)
+		if self.isEdge((x, y)):
+			self.removeEdge((x, y))
 		self.islandQueue.append((x, y))
 
 	def expandIsland(self):
@@ -123,24 +149,7 @@ class MyAI(AI):
 			return None
 		return self.islandQueue.pop(0)
 
-	###########################################################
-
-	def isValid(self, x: int, y: int) -> bool:
-		"""Checks if a coordinates is within the board"""
-		return 0 <= x < self.__rowDimension and 0 <= y < self.__colDimension
-
-	def getNeighbors(self, x: int, y: int) -> [(int, int)]:
-		"""Returns all legal neighbors of cell (x, y)"""
-		return [(x + rowDiff, y + colDiff)
-				for rowDiff in (-1, 0, 1)
-				for colDiff in (-1, 0, 1)
-				if self.isValid(x + rowDiff, y + colDiff)
-				and (rowDiff, colDiff) != (0, 0)]
-
-	def isUncovered(self, x: int, y: int) -> bool:
-		return self.getValue(x, y) != -1
-
-	def uncoverIsland(self, val: int):
+	def uncoverIsland(self, val: int) -> "Action Object" or None:
 		"""Uncovers patch of 0's and their adjacent"""
 		currentCell = self.getCurrent()
 
@@ -158,24 +167,134 @@ class MyAI(AI):
 
 		# Find expanding location
 		expandingLocation = self.expandIsland()
+
+		# Check if island queue is empty
 		if expandingLocation is not None:
 			self.setCurrent(*expandingLocation)
+
 			# If cell already uncovered, move on
 			# Else uncover the cell
 			if self.isUncovered(*expandingLocation):
 				return self.uncoverIsland(self.getValue(*expandingLocation))
 			else:
+				self.request += 1
 				return Action(AI.Action.UNCOVER, *expandingLocation)
 		else:
 			return None
 
-	def solve(self, value: int) -> "Action Object":
-		action = self.uncoverIsland(value)
-		if action is None:
-			action = Action(AI.Action.LEAVE)
-		return action
+	def expandPerfectEdge(self):
+		"""
+			Plant flags around a cell where its value is equal to its covered neighbor
+			This means that everything around them are mines
+		"""
+		for edge in self.edge.keys():
+			emptyNeighbors = self.getUnknownNeighbors(*edge)
+			if len(emptyNeighbors) == self.getValue(*edge):
+				for neighbor in emptyNeighbors:
+					if not self.isMine(*neighbor):
+						self.plant(*neighbor, edge)
 
+	###########################################################
+
+
+	# Neighbors
+	###########################################################
+	def getNeighbors(self, x: int, y: int) -> [(int, int)]:
+		"""Returns all legal neighbors of cell (x, y)"""
+		return [(x + rowDiff, y + colDiff)
+				for rowDiff in (-1, 0, 1)
+				for colDiff in (-1, 0, 1)
+				if self.isValid(x + rowDiff, y + colDiff)
+				and (rowDiff, colDiff) != (0, 0)]
+
+	def getUnknownNeighbors(self, x: int, y: int) -> [(int, int)]:
+		"""Returns all legal neighbors of cell (x, y) that is still covered"""
+		return [coords for coords in self.getNeighbors(x, y) if not self.isUncovered(*coords) or self.isMine(*coords)]
+
+	###########################################################
+
+
+	# Working with mines
+	###########################################################
+	def isMine(self, x: int, y: int) -> bool:
+		"""Checks if a coordinates contains a flag"""
+		return self.getValue(x, y) <= -2
+
+	def getMine(self):
+		"""Pops a mine from the queue to process"""
+		if len(self.mineQueue) == 0:
+			return None
+		return self.mineQueue.pop(0)
+
+	def plant(self, x: int, y: int, planter: (int, int)):
+		"""Puts down a flag at coordinate (x, y)"""
+		self.visit(x, y)
+		self.setValue(x, y, -2)
+		self.currentFlag -= 1
+		self.mineQueue.append((x, y, planter))
+
+	def defuse(self) -> int or None:
+		"""Defuses a mine to continue expanding island"""
+		mine = self.getMine()
+		# If there is mine to defuse
+		if mine is not None:
+			x, y, planter = mine
+
+			# Move pointer to planter (cell which puts the mine there)
+			self.setCurrent(*planter)
+
+			# Resets all the eligible neighbor to original condition
+			for neighbor in self.getNeighbors(x, y):
+				if not self.isMine(*neighbor):
+					if self.isUncovered(*neighbor):
+						self.setValue(*neighbor, self.getValue(*neighbor) - 1)
+						self.unvisit(*neighbor)
+						self.removeEdge(neighbor)
+					else:
+						# But remember for those who are still covered what value they will be in the future
+						self.setMemo(*neighbor, self.getMemo(*neighbor) - 1)
+			return self.getValue(*self.getCurrent())
+		else:
+			return None
+
+	###########################################################
+
+
+	# Misc methods
+	###########################################################
+	def isUncovered(self, x: int, y: int) -> bool:
+		"""Checks if a coordinates is already covered"""
+		return self.getValue(x, y) != -1
+
+	def isValid(self, x: int, y: int) -> bool:
+		"""Checks if a coordinates is within the board"""
+		return 0 <= x < self.__rowDimension and 0 <= y < self.__colDimension
+	###########################################################
+
+
+	# General processes
+	###########################################################
+	def solve(self, value: int) -> "Action Object":
+
+		if len(self.islandQueue) == 0:
+			defusedValue = self.defuse() 
+			if defusedValue is not None:
+				value = defusedValue
+
+		action = self.uncoverIsland(value)
+
+		#Island is set, start looking for perfect edge
+		if action is None:
+			self.expandPerfectEdge()
+			action = self.getAction(self.getValue(*self.getCurrent()))
+		return action
+	###########################################################
+
+
+	# Main action method
+	###########################################################
 	def getAction(self, number: int) -> "Action Object":
-		if self.currentFlag == 0:
+		if self.targetMet():
 			return Action(AI.Action.LEAVE)
 		return self.solve(number)
+	###########################################################
