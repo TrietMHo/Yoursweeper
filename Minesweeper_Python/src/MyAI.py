@@ -1,7 +1,7 @@
-# ==============================CS-199==================================
+# ==============================CS-171==================================
 # FILE:			MyAI.py
 #
-# AUTHOR: 		Justin Chung
+# AUTHORS: 		Triet Ho, Derek Dang
 #
 # DESCRIPTION:	This file contains the MyAI class. You will implement your
 #				agent in this file. You will write the 'getAction' function,
@@ -10,7 +10,7 @@
 # NOTES: 		- MyAI inherits from the abstract AI class in AI.py.
 #
 #				- DO NOT MAKE CHANGES TO THIS FILE.
-# ==============================CS-199==================================
+# ==============================CS-171==================================
 
 from AI import AI
 from Action import Action
@@ -162,7 +162,7 @@ class MyAI(AI):
 			self.edge[currentCell] = True
 		else:
 			for neighbor in self.getNeighbors(*currentCell):
-				if not self.isVisited(*neighbor):
+				if not self.isVisited(*neighbor) or self.isEdge(neighbor):
 					self.markExpandLocation(*neighbor)
 
 		# Find expanding location
@@ -182,17 +182,22 @@ class MyAI(AI):
 		else:
 			return None
 
-	def expandPerfectEdge(self):
+	def expandPerfectEdge(self) -> bool:
 		"""
 			Plant flags around a cell where its value is equal to its covered neighbor
 			This means that everything around them are mines
 		"""
+		existsPerfectEdge = False
+
 		for edge in self.edge.keys():
 			emptyNeighbors = self.getUnknownNeighbors(*edge)
 			if len(emptyNeighbors) == self.getValue(*edge):
+				existsPerfectEdge = True
 				for neighbor in emptyNeighbors:
 					if not self.isMine(*neighbor):
 						self.plant(*neighbor, edge)
+
+		return existsPerfectEdge
 
 	###########################################################
 
@@ -209,7 +214,9 @@ class MyAI(AI):
 
 	def getUnknownNeighbors(self, x: int, y: int) -> [(int, int)]:
 		"""Returns all legal neighbors of cell (x, y) that is still covered"""
-		return [coords for coords in self.getNeighbors(x, y) if not self.isUncovered(*coords) or self.isMine(*coords)]
+		return [coords for coords in self.getNeighbors(x, y)
+				if not self.isUncovered(*coords)
+				or self.isMine(*coords)]
 
 	###########################################################
 
@@ -218,7 +225,11 @@ class MyAI(AI):
 	###########################################################
 	def isMine(self, x: int, y: int) -> bool:
 		"""Checks if a coordinates contains a flag"""
-		return self.getValue(x, y) <= -2
+		return self.getValue(x, y) == -2
+
+	def isDefused(self, x: int, y: int) -> bool:
+		"""Checks if a mine is defused"""
+		return self.getValue(x, y) == -3
 
 	def getMine(self):
 		"""Pops a mine from the queue to process"""
@@ -245,7 +256,7 @@ class MyAI(AI):
 
 			# Resets all the eligible neighbor to original condition
 			for neighbor in self.getNeighbors(x, y):
-				if not self.isMine(*neighbor):
+				if not self.isMine(*neighbor) and not self.isDefused(*neighbor):
 					if self.isUncovered(*neighbor):
 						self.setValue(*neighbor, self.getValue(*neighbor) - 1)
 						self.unvisit(*neighbor)
@@ -253,6 +264,7 @@ class MyAI(AI):
 					else:
 						# But remember for those who are still covered what value they will be in the future
 						self.setMemo(*neighbor, self.getMemo(*neighbor) - 1)
+				self.setValue(x, y, -3)
 			return self.getValue(*self.getCurrent())
 		else:
 			return None
@@ -285,16 +297,31 @@ class MyAI(AI):
 
 		#Island is set, start looking for perfect edge
 		if action is None:
-			self.expandPerfectEdge()
-			action = self.getAction(self.getValue(*self.getCurrent()))
+			existsPerfectEdge = self.expandPerfectEdge()
+			if existsPerfectEdge:
+				action = self.getAction(self.getValue(*self.getCurrent()))
+			else:
+				action = Action(AI.Action.LEAVE)
 		return action
 	###########################################################
 
 
+	def printb(self):
+		for i in range(self.__rowDimension-1, -1, -1):
+			for j in range(self.__colDimension):
+				print(str(self.getValue(j, i)).rjust(3), end=" ")
+			print()
+			print()
+		print()
+		print([(i[0]+1, i[1]+1) for i in list(self.edge.keys())])
+		print('-----------------')
+
 	# Main action method
 	###########################################################
 	def getAction(self, number: int) -> "Action Object":
+		#self.printb()
 		if self.targetMet():
 			return Action(AI.Action.LEAVE)
 		return self.solve(number)
+
 	###########################################################
