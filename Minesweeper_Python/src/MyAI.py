@@ -14,6 +14,7 @@
 
 from AI import AI
 from Action import Action
+from random import random as rand
 
 
 class MyAI(AI):
@@ -272,15 +273,42 @@ class MyAI(AI):
 	###########################################################
 
 
-	# Misc methods
+	# Model Checking
 	###########################################################
-	def isUncovered(self, x: int, y: int) -> bool:
-		"""Checks if a coordinates is already covered"""
-		return self.getValue(x, y) != -1
 
-	def isValid(self, x: int, y: int) -> bool:
-		"""Checks if a coordinates is within the board"""
-		return 0 <= x < self.__rowDimension and 0 <= y < self.__colDimension
+	def modelCheck(self) -> (int, int):
+		"""Checks all possible worlds and return the coords with the least possibility for bombs"""
+		possibility = dict()
+
+		# Generate worlds
+		###########################################################
+		def simulate(board: [[int]], edge: {(int, int): bool}, mines: int, path: [(int, int)]):
+			"""Simulate all the worlds"""
+			pass
+
+		###########################################################
+
+		def slt(a, b):
+			if b == -1:
+				return True
+			return a < b
+
+
+		simulate(self.value.copy(), self.edge.copy(), self.__totalMines, [])
+
+		minVal = -1
+		coords = (None, None)
+
+		for k, val in possibility.items():
+			if slt(val, minVal):
+				minVal = val
+				coords = k
+			elif val == minVal:
+				if rand() > 0.5:
+					coords = k
+
+		return coords
+
 	###########################################################
 
 
@@ -301,10 +329,23 @@ class MyAI(AI):
 			if existsPerfectEdge:
 				action = self.getAction(self.getValue(*self.getCurrent()))
 			else:
+				# Leave for now
+				# TODO: Implement Model Checking
 				action = Action(AI.Action.LEAVE)
 		return action
+
 	###########################################################
 
+
+	# Misc methods
+	###########################################################
+	def isUncovered(self, x: int, y: int) -> bool:
+		"""Checks if a coordinates is already covered"""
+		return self.getValue(x, y) != -1
+
+	def isValid(self, x: int, y: int) -> bool:
+		"""Checks if a coordinates is within the board"""
+		return 0 <= x < self.__rowDimension and 0 <= y < self.__colDimension
 
 	def printb(self):
 		for i in range(self.__rowDimension-1, -1, -1):
@@ -315,6 +356,9 @@ class MyAI(AI):
 		print()
 		print([(i[0]+1, i[1]+1) for i in list(self.edge.keys())])
 		print('-----------------')
+
+	###########################################################
+
 
 	# Main action method
 	###########################################################
