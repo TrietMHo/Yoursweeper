@@ -11,39 +11,48 @@
 #
 #				- DO NOT MAKE CHANGES TO THIS FILE.
 # ==============================CS-171==================================
-
 from AI import AI
 from Action import Action
-from random import random as rand
+#from random import random as rand
 
 
 class MyAI(AI):
 
 	def __init__(self, rowDimension, colDimension, totalMines, startX, startY):
 		# Board information
-		self.__rowDimension = rowDimension
-		self.__colDimension = colDimension
-		self.__totalMines = totalMines
-		self.__startX = startX
-		self.__startY = startY
-		self.__target = rowDimension * colDimension - totalMines
-		self.request = 1
+		try:
+			self.__rowDimension = rowDimension
+			self.__colDimension = colDimension
+			self.__totalMines = totalMines
+			self.__startX = startX
+			self.__startY = startY
+			self.__target = rowDimension * colDimension - totalMines
+			self.request = 1
 
-		# Current pointer location
-		self.currentX = startX
-		self.currentY = startY
-		self.currentFlag = totalMines
+			# Current pointer location
+			self.currentX = startX
+			self.currentY = startY
+			self.currentFlag = totalMines
 
-		# State of the board
-		self.value = [[-1 for _col in range(colDimension)] for _row in range(rowDimension)]
-		self.visited = [[False for _col in range(colDimension)] for _row in range(rowDimension)]
-		self.memo = [[0 for _col in range(colDimension)] for _row in range(rowDimension)]
-		self.edge = dict()
+			# State of the board
+			self.value = [[-1 for _col in range(colDimension)] for _row in range(rowDimension)]
+			self.visited = [[False for _col in range(colDimension)] for _row in range(rowDimension)]
+			self.memo = [[0 for _col in range(colDimension)] for _row in range(rowDimension)]
+			self.edge = dict()
 
-		self.visited[startX][startY] = True
+			self.visited[startX][startY] = True
 
-		self.islandQueue = []
-		self.mineQueue = []
+			self.islandQueue = []
+			self.mineQueue = []
+
+			self.checkResult = dict()
+			self.skipAhead = set()
+
+			self.worldCount = 0
+			#print("Test")
+		except:
+			#print(rowDimension, colDimension, totalMines, startX, startY)
+			pass
 
 
 	# Exit condition
@@ -71,12 +80,149 @@ class MyAI(AI):
 	# Value of cells
 	###########################################################
 	def setValue(self, x: int, y: int, val: int):
-		"""Sets value of (x, y) to val"""
+		"""
+		Sets value of (x, y) to val
+		-1 is covered,
+		-2 is flagged,
+		-3 is mine
+		"""
 		self.value[x][y] = val
 
 	def getValue(self, x: int, y: int) -> int:
 		"""Gets value of cell (x, y)"""
 		return self.value[x][y]
+
+	def isUncovered(self, x: int, y: int) -> bool:
+		"""Checks if a coordinates is already covered"""
+		return self.getValue(x, y) != -1
+
+	###########################################################
+
+	# Pattern Matching
+	###########################################################
+	"""
+		Pattern:
+			S: safe to open
+			.: any value
+			K: known value
+			M: is definitely a mine
+	"""
+
+	def patternMatching(self):
+		#self.printb(self.value)
+		for e in self.edge:
+
+			m = self.pattern1(*e)
+			if m is not None:
+				xy, planter = m
+				self.plant(planter, *xy)
+				#print("Pattern 1")
+				return True
+
+			m = self.pattern2(*e)
+			if m is not None and m != []:
+				for tbu in m:  # to be uncovered
+					self.skipAhead.add(tbu)
+				#print("Pattern 2")
+				return True
+		return False
+
+	def pattern1(self, x: int, y: int):
+		"""
+		Matches Pattern
+			SSS        SSS        SSS
+			.1.   or   .1.   or   .1.
+			.2.        .2.        .2.
+			KKM        KMK        MKK
+		and all of its rotations
+		converting it to pattern2
+		returns location of the mine and the cell with value 2
+		"""
+		def matching(f1: "def f", f2: "def f", f3: "def f", cx: int, cy: int) -> ((int, int), (int, int)):
+			# Main direction: f2:
+			mid = f2(cx, cy)
+			edge1 = None if mid is None else f1(*mid)
+			edge2 = None if mid is None else f3(*mid)
+			n = [mid is None or self.isUncovered(*mid),
+				 edge1 is None or self.isUncovered(*edge1),
+				 edge2 is None or self.isUncovered(*edge2)]
+			return ([mid, edge1, edge2][n.index(False)], (cx, cy)) if n.count(False) == 1 else None
+
+		if self.getValue(x, y) == 1:
+			if self.topOf(x, y) is not None and self.getValue(*self.topOf(x, y)) == 2:
+				return matching(self.rightOf, self.topOf, self.leftOf, *self.topOf(x, y))
+			elif self.rightOf(x, y) is not None and self.getValue(*self.rightOf(x, y)) == 2:
+				return matching(self.topOf, self.rightOf, self.bottomOf, *self.rightOf(x, y))
+			elif self.bottomOf(x, y) is not None and self.getValue(*self.bottomOf(x, y)) == 2:
+				return matching(self.leftOf, self.bottomOf, self.rightOf, *self.bottomOf(x, y))
+			elif self.leftOf(x, y) is not None and self.getValue(*self.leftOf(x, y)) == 2:
+				return matching(self.topOf, self.leftOf, self.bottomOf, *self.leftOf(x, y))
+			else:
+				return None
+
+	def pattern2(self, x: int, y: int):
+		"""
+		Matches Pattern
+			SSS
+			.1.
+			.1.
+			KKK
+		and all of its rotations
+		"""
+		def isWall(vert, coords):
+			if coords is None:
+				return True
+			if vert:
+				wallLeft = self.leftOf(*coords)
+				wallRight = self.rightOf(*coords)
+				if (wallLeft is None or self.isUncovered(*wallLeft)) \
+					and (wallRight is None or self.isUncovered(*wallRight)):
+					return True
+				return False
+
+			wallTop = self.topOf(*coords)
+			wallBottom = self.bottomOf(*coords)
+			if (wallTop is None or self.isUncovered(*wallTop)) \
+				and (wallBottom is None or self.isUncovered(*wallBottom)):
+				return True
+			return False
+
+		def getWall(vert, coords):
+			if coords is None:
+				return []
+			if vert:
+				return [self.leftOf(*coords), coords, self.rightOf(*coords)]
+			return [self.topOf(*coords), coords, self.bottomOf(*coords)]
+
+		def opposite(direction):
+			if direction == self.topOf:
+				return self.bottomOf
+			elif direction == self.bottomOf:
+				return self.topOf
+			elif direction == self.leftOf:
+				return self.rightOf
+			else:
+				return self.leftOf
+
+		def getSafe(direction, cx, cy):
+			newLocation = direction(cx, cy)
+			if newLocation is None or self.getValue(*newLocation) != 1:
+				return None
+			return [c for c in getWall(direction in (self.topOf, self.bottomOf), direction(*newLocation))
+					if c is not None and self.isValid(*c) and not self.isUncovered(*c)]
+
+
+		def walk(direction, cx, cy):
+			wallMid = direction(cx, cy)
+			if wallMid is None or self.isUncovered(*wallMid):
+				if isWall(direction in (self.topOf, self.bottomOf), wallMid):
+					return getSafe(opposite(direction), cx, cy)
+
+		if self.getValue(x, y) == 1:
+			for d in (self.topOf, self.leftOf, self.rightOf, self.bottomOf):
+				retVal = walk(d, x, y)
+				if retVal is not None:
+					return retVal
 
 	###########################################################
 
@@ -114,6 +260,22 @@ class MyAI(AI):
 		"""Checks if a cell is visited"""
 		return self.visited[x][y]
 
+	def leftOf(self, x: int, y: int) -> (int, int):
+		"""Finds the cell to the left of (x, y)"""
+		return (x-1, y) if self.isValid(x-1, y) else None
+
+	def rightOf(self, x: int, y: int):
+		"""Finds the cell to the right of (x,y)"""
+		return (x+1, y) if self.isValid(x+1, y) else None
+
+	def topOf(self, x: int, y: int):
+		"""Finds the cell to the top of (x, y)"""
+		return (x, y - 1) if self.isValid(x, y - 1) else None
+
+	def bottomOf(self, x: int, y: int):
+		"""Finds the cell to the bottom of (x, y)"""
+		return (x, y + 1) if self.isValid(x, y + 1) else None
+
 	###########################################################
 
 
@@ -131,6 +293,14 @@ class MyAI(AI):
 	def isEdge(self, coords: (int, int)) -> bool:
 		"""Checks if a coordinates belong to an island's edge"""
 		return coords in self.edge
+
+	def getFrontier(self) -> {(int, int)}:
+		"""Returns the unknown cells along the edges"""
+		frontier = set()
+		for edge in self.edge:
+			for neighbor in self.getUnknownNeighbors(*edge):
+				frontier.add(neighbor)
+		return frontier
 
 	###########################################################
 
@@ -153,10 +323,11 @@ class MyAI(AI):
 	def uncoverIsland(self, val: int) -> "Action Object" or None:
 		"""Uncovers patch of 0's and their adjacent"""
 		currentCell = self.getCurrent()
+		#self.printb(self.value)
 
 		# Update value of current cell
-		self.setValue(*currentCell, val + self.applyMemo(*currentCell))
 
+		self.setValue(*currentCell, val + self.applyMemo(*currentCell))
 		# If value is not zero, it's part of the island's edge
 		# Else expand island
 		if self.getValue(*currentCell) != 0:
@@ -180,6 +351,7 @@ class MyAI(AI):
 			else:
 				self.request += 1
 				return Action(AI.Action.UNCOVER, *expandingLocation)
+
 		else:
 			return None
 
@@ -195,8 +367,8 @@ class MyAI(AI):
 			if len(emptyNeighbors) == self.getValue(*edge):
 				existsPerfectEdge = True
 				for neighbor in emptyNeighbors:
-					if not self.isMine(*neighbor):
-						self.plant(*neighbor, edge)
+					if not self.isFlagged(*neighbor):
+						self.plant(edge, *neighbor)
 
 		return existsPerfectEdge
 
@@ -217,14 +389,27 @@ class MyAI(AI):
 		"""Returns all legal neighbors of cell (x, y) that is still covered"""
 		return [coords for coords in self.getNeighbors(x, y)
 				if not self.isUncovered(*coords)
-				or self.isMine(*coords)]
+				or self.isFlagged(*coords)]
+
+	@staticmethod
+	def isNeighbor(c1: (int, int), c2: (int, int)) -> bool:
+		"""Checks if c1 and c2 are neighbors"""
+		if c1 == c2:
+			return False
+
+		x1, y1 = c1
+		x2, y2 = c2
+		if abs(x1-x2) <= 1 and abs(y1-y2) <= 0:
+			return True
+
+		return False
 
 	###########################################################
 
 
 	# Working with mines
 	###########################################################
-	def isMine(self, x: int, y: int) -> bool:
+	def isFlagged(self, x: int, y: int) -> bool:
 		"""Checks if a coordinates contains a flag"""
 		return self.getValue(x, y) == -2
 
@@ -238,7 +423,7 @@ class MyAI(AI):
 			return None
 		return self.mineQueue.pop(0)
 
-	def plant(self, x: int, y: int, planter: (int, int)):
+	def plant(self, planter: (int, int), x: int, y: int):
 		"""Puts down a flag at coordinate (x, y)"""
 		self.visit(x, y)
 		self.setValue(x, y, -2)
@@ -251,20 +436,25 @@ class MyAI(AI):
 		# If there is mine to defuse
 		if mine is not None:
 			x, y, planter = mine
+			if self.isDefused(x, y):
+				return None
 
 			# Move pointer to planter (cell which puts the mine there)
 			self.setCurrent(*planter)
 
 			# Resets all the eligible neighbor to original condition
 			for neighbor in self.getNeighbors(x, y):
-				if not self.isMine(*neighbor) and not self.isDefused(*neighbor):
+				if not self.isFlagged(*neighbor) and not self.isDefused(*neighbor):
 					if self.isUncovered(*neighbor):
 						self.setValue(*neighbor, self.getValue(*neighbor) - 1)
 						self.unvisit(*neighbor)
-						self.removeEdge(neighbor)
+						if self.getValue(*neighbor) == 0:
+							self.removeEdge(neighbor)
+							self.islandQueue.append(neighbor)
 					else:
 						# But remember for those who are still covered what value they will be in the future
 						self.setMemo(*neighbor, self.getMemo(*neighbor) - 1)
+
 				self.setValue(x, y, -3)
 			return self.getValue(*self.getCurrent())
 		else:
@@ -275,39 +465,69 @@ class MyAI(AI):
 
 	# Model Checking
 	###########################################################
+	def modelCheck(self) -> bool:
+		board = [r.copy() for r in self.value]
 
-	def modelCheck(self) -> (int, int):
-		"""Checks all possible worlds and return the coords with the least possibility for bombs"""
-		possibility = dict()
+		frontier = self.getFrontier()
+		if len(frontier) == 0:
+			return False
 
-		# Generate worlds
-		###########################################################
-		def simulate(board: [[int]], edge: {(int, int): bool}, mines: int, path: [(int, int)]):
-			"""Simulate all the worlds"""
-			pass
+		self.checkResult = {f: 0 for f in frontier}
+		self.worldCount = 0
 
-		###########################################################
+		self.put(board, frontier, self.__totalMines, set())
+		#print(self.checkResult)
 
-		def slt(a, b):
-			if b == -1:
-				return True
-			return a < b
+		mx = 2**1000
+		loc = None
+		retVal = False
+
+		for fk, fv in self.checkResult.items():
+			if fv < mx:
+				mx = fv
+				loc = fk
+				retVal = True
+			elif fv == 0:
+				self.skipAhead.add(fk)
+			#elif fv == self.worldCount:
+			#	self.plant([n for n in self.getNeighbors(*fk) if self.isValid(*n)][0], *loc)
+			#	retVal = True
+		self.skipAhead.add(loc)
+		return retVal
 
 
-		simulate(self.value.copy(), self.edge.copy(), self.__totalMines, [])
 
-		minVal = -1
-		coords = (None, None)
+	def put(self, board, frontier, mine, mineSet):
+		if len(frontier) == 0 or mine == 0:
+			#print(mineSet)
+			if self.verify(board):
+				self.worldCount += 1
+				for m in mineSet:
+					self.checkResult[m] += 1
+				#print(">>>", self.checkResult)
+			return
 
-		for k, val in possibility.items():
-			if slt(val, minVal):
-				minVal = val
-				coords = k
-			elif val == minVal:
-				if rand() > 0.5:
-					coords = k
+		examine = frontier.pop()
 
-		return coords
+		self.put([r.copy() for r in board], frontier.copy(), mine, mineSet.copy())
+
+		for neighborX, neighborY in self.getNeighbors(*examine):
+			board[neighborX][neighborY] -= 1
+			if board[neighborX][neighborY] < 0 and (neighborX, neighborY) in self.edge:
+				return
+		self.put([r.copy() for r in board], frontier.copy(), mine - 1, mineSet | {examine, })
+
+
+	def verify(self, board):
+		for e in self.edge:
+			#print(e, ":", board[e[0]][e[1]])
+			if board[e[0]][e[1]] != 0:
+				return False
+		#print("PASS")
+		return True
+
+
+
 
 	###########################################################
 
@@ -323,42 +543,56 @@ class MyAI(AI):
 
 		action = self.uncoverIsland(value)
 
-		#Island is set, start looking for perfect edge
 		if action is None:
+			# Can we open more tiles?
+			if self.skipAhead != set():
+				openCell = self.skipAhead.pop()
+				self.visit(*openCell)
+				self.setCurrent(*openCell)
+				return Action(AI.Action.UNCOVER, *openCell)
+
+			# Island is set, start looking for perfect edge
 			existsPerfectEdge = self.expandPerfectEdge()
 			if existsPerfectEdge:
 				action = self.getAction(self.getValue(*self.getCurrent()))
 			else:
-				# Leave for now
-				# TODO: Implement Model Checking
-				action = Action(AI.Action.LEAVE)
+				# If no perfect edge is found, starts looking for known patterns
+				if self.patternMatching():
+					action = self.solve(self.getValue(*self.getCurrent()))
+				else:
+					# Model checking
+					if self.modelCheck():
+						action = self.solve(self.getValue(*self.getCurrent()))
+					else:
+						# Don't know what to do, dip
+						#print("Leaving")
+						#print(self.edge)
+						#print(self.currentFlag)
+						#input()
+						action = Action(AI.Action.LEAVE)
+
 		return action
 
 	###########################################################
 
 
 	# Misc methods
-	###########################################################
-	def isUncovered(self, x: int, y: int) -> bool:
-		"""Checks if a coordinates is already covered"""
-		return self.getValue(x, y) != -1
-
+	############################################################
 	def isValid(self, x: int, y: int) -> bool:
 		"""Checks if a coordinates is within the board"""
 		return 0 <= x < self.__rowDimension and 0 <= y < self.__colDimension
 
-	def printb(self):
-		for i in range(self.__rowDimension-1, -1, -1):
-			for j in range(self.__colDimension):
-				print(str(self.getValue(j, i)).rjust(3), end=" ")
-			print()
-			print()
-		print()
-		print([(i[0]+1, i[1]+1) for i in list(self.edge.keys())])
-		print('-----------------')
+	def printb(self, board):
+		#for i in range(self.__rowDimension-1, -1, -1):
+		#	for j in range(self.__colDimension):
+		#		print(str(board[j][i]).rjust(3), end=" ")
+		#	print()
+		#	print()
+		#print()
+		#print('-----------------')
+		pass
 
 	###########################################################
-
 
 	# Main action method
 	###########################################################
