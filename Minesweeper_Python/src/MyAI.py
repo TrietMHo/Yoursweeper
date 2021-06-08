@@ -13,46 +13,44 @@
 # ==============================CS-171==================================
 from AI import AI
 from Action import Action
-#from random import random as rand
+from random import random as rand
 
 
 class MyAI(AI):
 
 	def __init__(self, rowDimension, colDimension, totalMines, startX, startY):
 		# Board information
-		try:
-			self.__rowDimension = rowDimension
-			self.__colDimension = colDimension
-			self.__totalMines = totalMines
-			self.__startX = startX
-			self.__startY = startY
-			self.__target = rowDimension * colDimension - totalMines
-			self.request = 1
+		self.__rowDimension = colDimension
+		self.__colDimension = rowDimension
+		self.__totalMines = totalMines
+		self.__startX = startY
+		self.__startY = startX
+		self.__target = rowDimension * colDimension - totalMines
+		self.request = 1
 
-			# Current pointer location
-			self.currentX = startX
-			self.currentY = startY
-			self.currentFlag = totalMines
+		# Current pointer location
+		self.currentX = startX
+		self.currentY = startY
+		self.currentFlag = totalMines
 
-			# State of the board
-			self.value = [[-1 for _col in range(colDimension)] for _row in range(rowDimension)]
-			self.visited = [[False for _col in range(colDimension)] for _row in range(rowDimension)]
-			self.memo = [[0 for _col in range(colDimension)] for _row in range(rowDimension)]
-			self.edge = dict()
+		# State of the board
+		self.value = [[-1 for _col in range(self.__colDimension)] for _row in range(self.__rowDimension)]
+		self.visited = [[False for _col in range(self.__colDimension)] for _row in range(self.__rowDimension)]
+		self.memo = [[0 for _col in range(self.__colDimension)] for _row in range(self.__rowDimension)]
+		self.edge = dict()
 
-			self.visited[startX][startY] = True
+		self.visited[startX][startY] = True
 
-			self.islandQueue = []
-			self.mineQueue = []
+		self.islandQueue = []
+		self.mineQueue = []
 
-			self.checkResult = dict()
-			self.skipAhead = set()
+		self.checkResult = dict()
+		self.skipAhead = set()
 
-			self.worldCount = 0
-			#print("Test")
-		except:
-			#print(rowDimension, colDimension, totalMines, startX, startY)
-			pass
+		self.worldCount = 0
+
+		self.splitFrontiers = []
+		self.randPick = (startX, startY)
 
 
 	# Exit condition
@@ -108,26 +106,27 @@ class MyAI(AI):
 			M: is definitely a mine
 	"""
 
-	def patternMatching(self):
-		#self.printb(self.value)
+	def patternMatching(self) -> bool:
+		"""Finds a pattern on the board. Returns True if a pattern is found."""
 		for e in self.edge:
 
+			# Pattern 1 checking (12KKM). Plants flags
 			m = self.pattern1(*e)
 			if m is not None:
 				xy, planter = m
 				self.plant(planter, *xy)
-				#print("Pattern 1")
 				return True
 
+			# Pattern 2 checking (11KKK). Marks safe location
 			m = self.pattern2(*e)
 			if m is not None and m != []:
 				for tbu in m:  # to be uncovered
 					self.skipAhead.add(tbu)
-				#print("Pattern 2")
 				return True
+
 		return False
 
-	def pattern1(self, x: int, y: int):
+	def pattern1(self, x: int, y: int) -> [(int, int)]:
 		"""
 		Matches Pattern
 			SSS        SSS        SSS
@@ -139,6 +138,7 @@ class MyAI(AI):
 		returns location of the mine and the cell with value 2
 		"""
 		def matching(f1: "def f", f2: "def f", f3: "def f", cx: int, cy: int) -> ((int, int), (int, int)):
+			"""Local function to find match pattern with specific direction"""
 			# Main direction: f2:
 			mid = f2(cx, cy)
 			edge1 = None if mid is None else f1(*mid)
@@ -148,6 +148,8 @@ class MyAI(AI):
 				 edge2 is None or self.isUncovered(*edge2)]
 			return ([mid, edge1, edge2][n.index(False)], (cx, cy)) if n.count(False) == 1 else None
 
+		# Find the location of 1 and look around to find a 2
+		# And try to match pattern if found
 		if self.getValue(x, y) == 1:
 			if self.topOf(x, y) is not None and self.getValue(*self.topOf(x, y)) == 2:
 				return matching(self.rightOf, self.topOf, self.leftOf, *self.topOf(x, y))
@@ -160,7 +162,7 @@ class MyAI(AI):
 			else:
 				return None
 
-	def pattern2(self, x: int, y: int):
+	def pattern2(self, x: int, y: int) -> [(int, int)]:
 		"""
 		Matches Pattern
 			SSS
@@ -169,9 +171,12 @@ class MyAI(AI):
 			KKK
 		and all of its rotations
 		"""
-		def isWall(vert, coords):
+		def isWall(vert: bool, coords: (int, int)) -> bool:
+			"""Verifies the safeness of the 3 cells perpendicular to the direction of inspection"""
 			if coords is None:
 				return True
+
+			# Direction of inspection is vertical
 			if vert:
 				wallLeft = self.leftOf(*coords)
 				wallRight = self.rightOf(*coords)
@@ -180,6 +185,7 @@ class MyAI(AI):
 					return True
 				return False
 
+			# Direction of inspection is horizontal
 			wallTop = self.topOf(*coords)
 			wallBottom = self.bottomOf(*coords)
 			if (wallTop is None or self.isUncovered(*wallTop)) \
@@ -187,14 +193,16 @@ class MyAI(AI):
 				return True
 			return False
 
-		def getWall(vert, coords):
+		def getWall(vert: bool, coords: (int, int)) -> [(int, int)]:
+			"""Returns the 3 cells perpendicular to the direction of inspection"""
 			if coords is None:
 				return []
 			if vert:
 				return [self.leftOf(*coords), coords, self.rightOf(*coords)]
 			return [self.topOf(*coords), coords, self.bottomOf(*coords)]
 
-		def opposite(direction):
+		def opposite(direction: "def f") -> "def f":
+			"""Returns the opposite direction in the form of a function"""
 			if direction == self.topOf:
 				return self.bottomOf
 			elif direction == self.bottomOf:
@@ -204,15 +212,18 @@ class MyAI(AI):
 			else:
 				return self.leftOf
 
-		def getSafe(direction, cx, cy):
+		def getSafe(direction: "def f", cx: int, cy: int) -> [(int, int)]:
+			"""Returns the safe covered locations if the pattern is matched"""
 			newLocation = direction(cx, cy)
+			# Pattern not matched
 			if newLocation is None or self.getValue(*newLocation) != 1:
 				return None
 			return [c for c in getWall(direction in (self.topOf, self.bottomOf), direction(*newLocation))
 					if c is not None and self.isValid(*c) and not self.isUncovered(*c)]
 
 
-		def walk(direction, cx, cy):
+		def walk(direction: "def f", cx: int, cy: int) -> [(int, int)]:
+			"""Inspects the area around cx, cy to find the pattern"""
 			wallMid = direction(cx, cy)
 			if wallMid is None or self.isUncovered(*wallMid):
 				if isWall(direction in (self.topOf, self.bottomOf), wallMid):
@@ -279,7 +290,7 @@ class MyAI(AI):
 	###########################################################
 
 
-	# Edges
+	# Edges and Frontiers
 	###########################################################
 	def setEdge(self, coords: (int, int)):
 		"""Sets cell coordinates as part of the island's edge"""
@@ -302,6 +313,24 @@ class MyAI(AI):
 				frontier.add(neighbor)
 		return frontier
 
+	def splitFrontier(self) -> [{(int, int)}]:
+		"""Returns a set of independent frontiers (set of coordinates)"""
+		frontiers = []
+		frontierExpanding = []
+		mergedFrontier = self.getFrontier()
+		while mergedFrontier != set():
+			c = mergedFrontier.pop()
+			newFrontier = {c, }
+			frontierExpanding += [n for n in self.getNeighbors(*c) if n in mergedFrontier]
+			while frontierExpanding:
+				c2 = frontierExpanding.pop(0)
+				newFrontier.add(c2)
+				mergedFrontier.discard(c2)
+				frontierExpanding += [n for n in self.getNeighbors(*c2) if n in mergedFrontier]
+			frontiers.append(newFrontier)
+
+		self.splitFrontiers = frontiers
+
 	###########################################################
 
 
@@ -323,7 +352,6 @@ class MyAI(AI):
 	def uncoverIsland(self, val: int) -> "Action Object" or None:
 		"""Uncovers patch of 0's and their adjacent"""
 		currentCell = self.getCurrent()
-		#self.printb(self.value)
 
 		# Update value of current cell
 
@@ -399,7 +427,7 @@ class MyAI(AI):
 
 		x1, y1 = c1
 		x2, y2 = c2
-		if abs(x1-x2) <= 1 and abs(y1-y2) <= 0:
+		if abs(x1-x2) <= 1 and abs(y1-y2) <= 1:
 			return True
 
 		return False
@@ -468,15 +496,16 @@ class MyAI(AI):
 	def modelCheck(self) -> bool:
 		board = [r.copy() for r in self.value]
 
+		#if len(self.splitFrontiers) == 0:
+		#	return False
+
+		#frontier = self.splitFrontiers.pop(0)
 		frontier = self.getFrontier()
-		if len(frontier) == 0:
-			return False
 
 		self.checkResult = {f: 0 for f in frontier}
 		self.worldCount = 0
 
 		self.put(board, frontier, self.__totalMines, set())
-		#print(self.checkResult)
 
 		mx = 2**1000
 		loc = None
@@ -492,6 +521,9 @@ class MyAI(AI):
 			#elif fv == self.worldCount:
 			#	self.plant([n for n in self.getNeighbors(*fk) if self.isValid(*n)][0], *loc)
 			#	retVal = True
+			if fv == mx and rand() > 0.75:
+				loc = fk
+                                
 		self.skipAhead.add(loc)
 		return retVal
 
@@ -499,12 +531,10 @@ class MyAI(AI):
 
 	def put(self, board, frontier, mine, mineSet):
 		if len(frontier) == 0 or mine == 0:
-			#print(mineSet)
 			if self.verify(board):
 				self.worldCount += 1
 				for m in mineSet:
 					self.checkResult[m] += 1
-				#print(">>>", self.checkResult)
 			return
 
 		examine = frontier.pop()
@@ -520,10 +550,8 @@ class MyAI(AI):
 
 	def verify(self, board):
 		for e in self.edge:
-			#print(e, ":", board[e[0]][e[1]])
 			if board[e[0]][e[1]] != 0:
 				return False
-		#print("PASS")
 		return True
 
 
@@ -537,7 +565,7 @@ class MyAI(AI):
 	def solve(self, value: int) -> "Action Object":
 
 		if len(self.islandQueue) == 0:
-			defusedValue = self.defuse() 
+			defusedValue = self.defuse()
 			if defusedValue is not None:
 				value = defusedValue
 
@@ -561,14 +589,12 @@ class MyAI(AI):
 					action = self.solve(self.getValue(*self.getCurrent()))
 				else:
 					# Model checking
+					#if len(self.splitFrontiers) == 0:
+					#	self.splitFrontier()
 					if self.modelCheck():
 						action = self.solve(self.getValue(*self.getCurrent()))
 					else:
 						# Don't know what to do, dip
-						#print("Leaving")
-						#print(self.edge)
-						#print(self.currentFlag)
-						#input()
 						action = Action(AI.Action.LEAVE)
 
 		return action
@@ -582,22 +608,11 @@ class MyAI(AI):
 		"""Checks if a coordinates is within the board"""
 		return 0 <= x < self.__rowDimension and 0 <= y < self.__colDimension
 
-	def printb(self, board):
-		#for i in range(self.__rowDimension-1, -1, -1):
-		#	for j in range(self.__colDimension):
-		#		print(str(board[j][i]).rjust(3), end=" ")
-		#	print()
-		#	print()
-		#print()
-		#print('-----------------')
-		pass
-
 	###########################################################
 
 	# Main action method
 	###########################################################
 	def getAction(self, number: int) -> "Action Object":
-		#self.printb()
 		if self.targetMet():
 			return Action(AI.Action.LEAVE)
 		return self.solve(number)
