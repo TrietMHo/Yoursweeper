@@ -13,7 +13,7 @@
 # ==============================CS-171==================================
 from AI import AI
 from Action import Action
-from random import random as rand
+#from random import random as rand
 
 
 class MyAI(AI):
@@ -521,8 +521,8 @@ class MyAI(AI):
 			#elif fv == self.worldCount:
 			#	self.plant([n for n in self.getNeighbors(*fk) if self.isValid(*n)][0], *loc)
 			#	retVal = True
-			if fv == mx and rand() > 0.75:
-				loc = fk
+			#if fv == mx and rand() > 0.75:
+			#	loc = fk
                                 
 		self.skipAhead.add(loc)
 		return retVal
